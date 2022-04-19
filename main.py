@@ -1,6 +1,6 @@
 # Arcaea Songlist & Package Integrity Checker
 # 
-# Version: 1.1-CHS
+# Version: 1.2-CHS
 # 
 # Last Edited: April 18 2022
 #
@@ -14,7 +14,7 @@ import os
 import json
 import re
 
-version = "1.1-CHS"
+version = "1.2-CHS"
 
 fileList = ["base.jpg","base_256.jpg","base.ogg"]
 
@@ -35,8 +35,8 @@ def checkSonglistInFolder():
     for song in songList:
         for songFolderName in dirs:
             if song['id'] in dirs or ("dl_" + song['id']) == songFolderName:
-                continue
-            print("id 为 " + song['id'] + " 的曲目在songlist中, 但不在文件夹中")
+                return 0
+        print("id 为 " + song['id'] + " 的曲目在songlist中, 但不在文件夹中")
 
 def checkFolderInSonglist():
     dirs = scanSongDirectory()
@@ -107,7 +107,7 @@ def checkSonglistElement():
                     print("项目 \"set\" 在曲目 " + id + " 中不合法, 合法值为字符串.")
                 else:
                     if song["set"] not in packList:
-                        print("曲目 " + id + " 中的项目 \"set\" 所指示的pack名称在Packlist中未找到, 请检查对应关系.")
+                        print("曲目 " + id + " 中的项目 \"set\" 所指示的pack名称 \"" + song["set"] + "\" 在Packlist中未找到, 请检查对应关系.")
 
         #title_localized
         if not "title_localized" in song.keys():
@@ -246,7 +246,9 @@ def resolvePacklist():
     except BaseException as e:
         print("发生了未知错误.\n" + repr(e))
         exit()
-    return [packListId['id'] for packListId in packlistSeq]
+    packlist = [packListId['id'] for packListId in packlistSeq]
+    packlist.append("single")
+    return packlist
 
 def resolveSonglist():
     global directory
