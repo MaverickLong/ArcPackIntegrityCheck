@@ -1,20 +1,26 @@
 # Arcaea Songlist & Package Integrity Checker
 # 
-# Version: 1.2-CHS
+# Version: 1.3-CHS
 # 
-# Last Edited: April 18 2022
+# Last Edited: April 29 2022
 #
 # Distributed Under the GPLv3 Lisence: https://www.gnu.org/licenses/gpl-3.0.en.html
+#
+# 1.3 Update:
+#
+# Fixed dublicate loop run when checking assets integrity.
+# The program will now run with python.exe (removed exit() in the program).
+# Added Windows .EXE execution version.
 #
 # To-dos:
 # bg check not implemented
 # Increase readibility
 
-import os
+from os import walk
 import json
-import re
+from re import match
 
-version = "1.2-CHS"
+version = "1.3-CHS"
 
 fileList = ["base.jpg","base_256.jpg","base.ogg"]
 
@@ -58,16 +64,17 @@ def checkAssetIntegrity():
         if songFolderName.startswith("dl_"):
             print("跳过下载文件夹 " + songFolderName)
             continue
-        for rootS, dirsS, filesS in os.walk(directory + "/" + songFolderName, topdown=False):
-            for checkObj in fileList:
-                if checkObj not in filesS:
-                    print("在文件夹 " + songFolderName + " 中没有找到有效的" + checkObj + " 文件.")
-            withAff = False
-            for aff in filesS:
-                if re.match("[0-2].aff", aff) != None:
-                    withAff = True
-            if not withAff:
-                print("在文件夹 " + songFolderName + " 中没有找到有效的谱面(.aff)文件.")
+        for rootS, dirsS, filesS in walk(directory + "/" + songFolderName, topdown=False):
+            pass
+        for checkObj in fileList:
+            if checkObj not in filesS:
+                print("在文件夹 " + songFolderName + " 中没有找到有效的" + checkObj + " 文件.")
+        withAff = False
+        for aff in filesS:
+            if match("[0-2].aff", aff) != None:
+                withAff = True
+        if not withAff:
+            print("在文件夹 " + songFolderName + " 中没有找到有效的谱面(.aff)文件.")
 
 def checkSonglistElement():
     songList = resolveSonglist()
@@ -214,13 +221,15 @@ def scanSongDirectory():
     global directory
     if directory == "":
         directory = input("请输入你的自制包体中songs文件夹的路径 (例: C:/dir/songs/):")
+        if not directory.endswith("/"):
+            directory = directory + "/"
     print("正在扫描songs文件夹...")
     try:
-        for root, folders, files in os.walk(directory, topdown=False):
+        for root, folders, files in walk(directory, topdown=False):
             pass
     except Exception as e:
         print(repr(e))
-        exit()
+        input()
 
     for eliminateName in eliminateNameList:
         if eliminateName in folders:
@@ -239,13 +248,13 @@ def resolvePacklist():
     except json.JSONDecodeError as e:
         print("Packlist 解析在进行至文件第" + str(e.lineno) + "行, 第" + str(e.colno) + "列出现问题.")
         print("报错信息如下::\n" + repr(e))
-        exit()
+        input()
     except FileNotFoundError:
         print("没有找到有效的Packlist文件.")
-        exit()
+        input()
     except BaseException as e:
         print("发生了未知错误.\n" + repr(e))
-        exit()
+        input()
     packlist = [packListId['id'] for packListId in packlistSeq]
     packlist.append("single")
     return packlist
@@ -257,6 +266,8 @@ def resolveSonglist():
         songlistdir = directory
     elif directory == "":
         directory = input("请输入你的自制包体中songs文件夹的路径 (例: C:/dir/songs/):")
+        if not directory.endswith("/"):
+            directory = directory + "/"
         songlistdir = directory + "songlist"
     else:
         songlistdir = directory + "songlist"
@@ -267,13 +278,13 @@ def resolveSonglist():
     except json.JSONDecodeError as e:
         print("Songlist解析在进行至文件第" + str(e.lineno) + "行, 第" + str(e.colno) + "列出现问题.")
         print("报错信息如下:\n" + repr(e))
-        exit()
+        input()
     except FileNotFoundError:
         print("没有找到有效的Songlist文件.")
-        exit()
+        input()
     except BaseException as e:
         print("发生了未知错误.\n" + repr(e))
-        exit()
+        input()
     return songlistSeq
 
 def checkSonglistElementStandalone():
@@ -303,3 +314,5 @@ print("6. 执行全部检查")
 i = input("请输入您想执行的检查项目的序号 (1-6): ")
 
 functions.get(i)()
+
+input("按下回车键以退出程序.")
