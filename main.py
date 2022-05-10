@@ -148,7 +148,7 @@ def checkSonglistElement():
             else:
                 bg = song["bg"]
                 if bg == "":
-                    if side == "0": bg = "base_light"
+                    if side == 0: bg = "base_light"
                     else: bg = "base_conflict"
                 if not exists(bgDir + bg + ".jpg"):
                     print("曲目 " + id + " 所需的背景图片 " + bg + ".jpg 未找到.")
