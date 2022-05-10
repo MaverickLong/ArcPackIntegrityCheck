@@ -1,26 +1,31 @@
 # Arcaea Songlist & Package Integrity Checker
 # 
-# Version: 1.3-CHS
+# Version: 1.3-CHS-Modified by NegativeTriu
 # 
-# Last Edited: April 29 2022
+# Last Edited: May 10 2022
 #
 # Distributed Under the GPLv3 Lisence: https://www.gnu.org/licenses/gpl-3.0.en.html
 #
-# 1.3 Update:
+# Modifications:
 #
-# Fixed dublicate loop run when checking assets integrity.
-# The program will now run with python.exe (removed exit() in the program).
-# Added Windows .EXE execution version.
+# Fixed the issue of checkSonglistInFolder() function not working correctly.
+# To prevent showing error tracebacks, re-added exit() to the program.
+# Added config.json file to use the program more flexibly.
+# Added checks for bg integrity and diamond integrity.
+# Added check for non-ASCII filenames, to prevent signing issues.
+# Reordered parts of the code.
+# Added descriptions to checkAll() function, to make the output more readable.
+# Other small changes.
 #
 # To-dos:
-# bg check not implemented
 # Increase readibility
 
 from os import walk
+from os.path import exists
 import json
 from re import match
 
-version = "1.3-CHS"
+version = "1.3-CHS-Modified by NegativeTriu"
 
 fileList = ["base.jpg","base_256.jpg","base.ogg"]
 
@@ -32,21 +37,34 @@ songlistNumElementList = ["bpm_base"]
 difficultiesTextElementList = ["chartDesigner", "jacketDesigner"]
 
 standalone = False
+checkBgIntegrity = True
+
+# Configs
+allowBydAff = False
+allowNotASCIIFileName = False
+checkDiamondIntegrity = False
+useAssetsDirWhileCheckAll = False
+useBgDirInsteadOfImgDir = True
+diamondList = {}
 
 directory = ""
+bgDirectory = ""
 
 def checkSonglistInFolder():
-    dirs = scanSongDirectory()
     songList = resolveSonglist()
+    dirs = scanSongDirectory()
     for song in songList:
+        inSongFolder = False
         for songFolderName in dirs:
             if song['id'] in dirs or ("dl_" + song['id']) == songFolderName:
-                return 0
-        print("id 为 " + song['id'] + " 的曲目在songlist中, 但不在文件夹中")
+                inSongFolder = True
+                break
+        if not inSongFolder:
+            print("id 为 " + song['id'] + " 的曲目在songlist中, 但不在文件夹中")
 
 def checkFolderInSonglist():
-    dirs = scanSongDirectory()
     songList = resolveSonglist()
+    dirs = scanSongDirectory()
     for songFolderName in dirs:
         inSongList = False
         for song in songList:
@@ -61,18 +79,27 @@ def checkFolderInSonglist():
 def checkAssetIntegrity():
     dirs = scanSongDirectory()
     for songFolderName in dirs:
+        for rootS, dirsS, filesS in walk(directory + "/" + songFolderName, topdown=False):
+            if allowNotASCIIFileName:
+                pass
+            else:
+                for file in filesS:
+                    if match("^[ -~]*$", file) == None:
+                        print("在文件夹 " + songFolderName + " 中有非ASCII文件名的文件: " + file)
         if songFolderName.startswith("dl_"):
             print("跳过下载文件夹 " + songFolderName)
             continue
-        for rootS, dirsS, filesS in walk(directory + "/" + songFolderName, topdown=False):
-            pass
         for checkObj in fileList:
             if checkObj not in filesS:
                 print("在文件夹 " + songFolderName + " 中没有找到有效的" + checkObj + " 文件.")
         withAff = False
         for aff in filesS:
-            if match("[0-2].aff", aff) != None:
-                withAff = True
+            if allowBydAff:
+                if match("[0-3].aff", aff) != None:
+                    withAff = True
+            else:
+                if match("[0-2].aff", aff) != None:
+                    withAff = True
         if not withAff:
             print("在文件夹 " + songFolderName + " 中没有找到有效的谱面(.aff)文件.")
 
@@ -80,6 +107,7 @@ def checkSonglistElement():
     songList = resolveSonglist()
     if not standalone:
         packList = resolvePacklist()
+    bgDir = inputBgDir()
     songIdList = []
     for song in songList:
 
@@ -102,8 +130,35 @@ def checkSonglistElement():
                 if type(song[text]) != type(" "):
                     print("项目 \"" + text + "\" 在曲目 " + id + " 中不合法, 合法值为字符串.")
 
-        # Test for bg integrity
+        #side 
+        if not "side" in song.keys():
+            print("应有的项目 \"side\" is 在曲目 " + id + " 中未找到.")
+        else:
+            side = song["side"]
+            if type(side) != type(1):
+                print("项目 \"side\" 在曲目 " + id + " 中不合法, 合法值为取值0或1的整数(不带括号).")
+            else:
+                if side != 0 and side != 1:
+                    print("项目 \"side\" 在曲目 " + id + " 中不合法, 合法值为取值0或1的整数(不带括号).")
 
+        # Test for bg integrity
+        if not standalone and checkBgIntegrity:
+            if not "bg" in song.keys():
+                print("应有的项目 \"bg\" 在曲目 " + id + " 中未找到.")
+            else:
+                bg = song["bg"]
+                if bg == "":
+                    if side == 0: bg = "base_light"
+                    else: bg = "base_conflict"
+                if not exists(bgDir + bg + ".jpg"):
+                    print("曲目 " + id + " 所需的背景图片 " + bg + ".jpg 未找到.")
+                if checkDiamondIntegrity:
+                    if bg in diamondList:
+                        diamond = diamondList[bg]
+                        if diamond != "NO_DIAMOND" and not exists(bgDir + diamond + ".png"):
+                            print("曲目 " + id + " 所需的diamond图片 " + diamond + ".png 未找到.")
+                    elif not exists(bgDir + "diamond.png"):
+                        print("曲目 " + id + " 所需的diamond图片 diamond.png 未找到.")
 
         # Test for packlist integrity
         if not standalone:
@@ -155,16 +210,6 @@ def checkSonglistElement():
         if audioPreviewValidity == 2:
             if song["audioPreviewEnd"] < song["audioPreview"]:
                 print("曲目 " + id + " 中, audioPreviewEnd 应当大于或等于 audioPreview.")
-        
-        #side 
-        if not "side" in song.keys():
-            print("应有的项目 \"side\" is 在曲目 " + id + " 中未找到.")
-        else:
-            if type(song["side"]) != type(1):
-                print("项目 \"side\" 在曲目 " + id + " 中不合法, 合法值为取值0或1的整数(不带括号).")
-            else:
-                if song["side"]!= 0 and song["side"]!= 1:
-                    print("项目 \"side\" 在曲目 " + id + " 中不合法, 合法值为取值0或1的整数(不带括号).")
 
         #date
         if not "date" in song.keys():
@@ -212,9 +257,18 @@ def checkSonglistElement():
                     print("Beyond难度谱面无法单独存在, 否则游戏会闪退")
 
 def checkAll():
+    if useAssetsDirWhileCheckAll:
+        inputAssetsDir()
+    else:
+        inputSongsDir()
+        inputBgDir()
+    print("\n开始检查Songlist中的曲目是否都存在于songs文件夹...")
     checkSonglistInFolder()
+    print("\n开始检查songs文件夹中的曲目是否都存在于Songlist...")
     checkFolderInSonglist()
+    print("\n开始检查songs文件夹中songs文件夹中曲目子文件夹的文件是否完整...")
     checkAssetIntegrity()
+    print("\n开始检查Songlist合法性...")
     checkSonglistElement()
 
 def scanSongDirectory():
@@ -249,12 +303,15 @@ def resolvePacklist():
         print("Packlist 解析在进行至文件第" + str(e.lineno) + "行, 第" + str(e.colno) + "列出现问题.")
         print("报错信息如下::\n" + repr(e))
         input()
+        exit()
     except FileNotFoundError:
         print("没有找到有效的Packlist文件.")
         input()
+        exit()
     except BaseException as e:
         print("发生了未知错误.\n" + repr(e))
         input()
+        exit()
     packlist = [packListId['id'] for packListId in packlistSeq]
     packlist.append("single")
     return packlist
@@ -279,40 +336,109 @@ def resolveSonglist():
         print("Songlist解析在进行至文件第" + str(e.lineno) + "行, 第" + str(e.colno) + "列出现问题.")
         print("报错信息如下:\n" + repr(e))
         input()
+        exit()
     except FileNotFoundError:
         print("没有找到有效的Songlist文件.")
         input()
+        exit()
     except BaseException as e:
         print("发生了未知错误.\n" + repr(e))
         input()
+        exit()
     return songlistSeq
+
+def inputSongsDir():
+    global directory
+    directory = input("请输入你的自制包体中songs文件夹的路径 (例: C:/dir/songs/):")
+    if not directory.endswith("/"):
+        directory = directory + "/"
+    return directory
+
+def inputBgDir():
+    global bgDirectory
+    if bgDirectory == "":
+        if useBgDirInsteadOfImgDir:
+            bgDirectory = input("请输入你的自制包体中bg文件夹的路径 (例: C:/dir/bg/):")
+            if not bgDirectory.endswith("/"):
+                bgDirectory = bgDirectory + "/"
+        else:
+            bgDirectory = input("请输入你的自制包体中img文件夹的路径 (例: C:/dir/img/):")
+            if not bgDirectory.endswith("/"):
+                bgDirectory = bgDirectory + "/"
+            bgDirectory = bgDirectory + "bg/"
+    else: pass
+    return bgDirectory
+
+def inputAssetsDir():
+    global directory, bgDirectory
+    assetsDirectory = input("请输入你的自制包体中assets文件夹(iOS为Arc-mobile.app文件夹)的路径 (例: C:/dir/assets/):")
+    if not assetsDirectory.endswith("/"):
+        assetsDirectory = assetsDirectory + "/"
+    if standalone:
+        directory = assetsDirectory + "songs/songlist"
+    else:
+        directory = assetsDirectory + "songs/"
+    bgDirectory = assetsDirectory + "img/bg/"
+    return assetsDirectory
+
+def checkSonglistElementWithoutBg():
+    global checkBgIntegrity
+    checkBgIntegrity = False
+    checkSonglistElement()
 
 def checkSonglistElementStandalone():
     global standalone
     standalone = True
     checkSonglistElement()
     
-
+def readConfigs():
+    try:
+        with open("config.json", "r", encoding="utf-8") as configJSON:
+            configItems = json.loads(configJSON.read())
+        if "allowBydAff" in configItems:
+            global allowBydAff
+            allowBydAff = configItems["allowBydAff"]
+        if "allowNotASCIIFileName" in configItems:
+            global allowNotASCIIFileName
+            allowNotASCIIFileName = configItems["allowNotASCIIFileName"]
+        if "checkDiamondIntegrity" in configItems:
+            global checkDiamondIntegrity
+            checkDiamondIntegrity = configItems["checkDiamondIntegrity"]
+        if "useAssetsDirWhileCheckAll" in configItems:
+            global useAssetsDirWhileCheckAll
+            useAssetsDirWhileCheckAll = configItems["useAssetsDirWhileCheckAll"]
+        if "useBgDirInsteadOfImgDir" in configItems:
+            global useBgDirInsteadOfImgDir
+            useBgDirInsteadOfImgDir = configItems["useBgDirInsteadOfImgDir"]
+        if "diamondList" in configItems:
+            global diamondList
+            diamondList = configItems["diamondList"]
+    except:
+        return 0
 
 functions = {
     "1":checkSonglistInFolder,
     "2":checkFolderInSonglist,
     "3":checkAssetIntegrity,
     "4":checkSonglistElement,
-    "5":checkSonglistElementStandalone,
-    "6":checkAll,
+    "5":checkSonglistElementWithoutBg,
+    "6":checkSonglistElementStandalone,
+    "7":checkAll,
 }
 
 print("Arcaea Songlist & 自制包完整性检查 " + version)
+readConfigs()
 
 print("1. 检查Songlist中的曲目是否都存在于songs文件夹")
 print("2. 检查songs文件夹中的曲目是否都存在于Songlist")
 print("3. 检查songs文件夹中曲目子文件夹的文件是否完整(aff, jpg, ogg等)")
-print("4. 检查Songlist合法性(包含检查是否和Packlist等文件匹配)")
-print("5. 检查Songlist合法性(仅检查Songlist本身的合法性)")
-print("6. 执行全部检查")
-i = input("请输入您想执行的检查项目的序号 (1-6): ")
-
-functions.get(i)()
-
+print("4. 检查Songlist合法性(包含检查是否和Packlist等文件匹配, 以及检查背景文件完整性)")
+print("5. 检查Songlist合法性(包含检查是否和Packlist等文件匹配, 不检查背景文件完整性)")
+print("6. 检查Songlist合法性(仅检查Songlist本身的合法性)")
+print("7. 执行全部检查")
+i = input("请输入您想执行的检查项目的序号 (1-7) (默认: 7): ")
+try:
+    functions.get(i)()
+except BaseException:
+    functions.get("7")()
 input("按下回车键以退出程序.")
