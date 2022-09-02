@@ -1,31 +1,26 @@
 # Arcaea Songlist & Package Integrity Checker
 # 
-# Version: 1.3-CHS-Modified by NegativeTriu
+# Version: 1.5-CHS
 # 
-# Last Edited: May 10 2022
+# Last Edited: September 2 2022
 #
 # Distributed Under the GPLv3 Lisence: https://www.gnu.org/licenses/gpl-3.0.en.html
 #
 # Modifications:
-#
-# Fixed the issue of checkSonglistInFolder() function not working correctly.
-# To prevent showing error tracebacks, re-added exit() to the program.
-# Added config.json file to use the program more flexibly.
-# Added checks for bg integrity and diamond integrity.
-# Added check for non-ASCII filenames, to prevent signing issues.
-# Reordered parts of the code.
-# Added descriptions to checkAll() function, to make the output more readable.
-# Other small changes.
+# Added check for existence of Silent Answer in packlist.
+# Added check for hidden_until element.
+# Corrected typos.
 #
 # To-dos:
 # Increase readibility
 
+from operator import truediv
 from os import walk
 from os.path import exists
 import json
 from re import match
 
-version = "1.3-CHS-Modified by NegativeTriu"
+version = "1.5-CHS"
 
 fileList = ["base.jpg","base_256.jpg","base.ogg"]
 
@@ -35,6 +30,8 @@ songlistTextElementList = ["artist","bpm","version", "purchase","bg","set"]
 songlistNumElementList = ["bpm_base"]
 
 difficultiesTextElementList = ["chartDesigner", "jacketDesigner"]
+
+ratingClassName = ["Past, Present, Future, Beyond"]
 
 standalone = False
 checkBgIntegrity = True
@@ -136,10 +133,10 @@ def checkSonglistElement():
         else:
             side = song["side"]
             if type(side) != type(1):
-                print("项目 \"side\" 在曲目 " + id + " 中不合法, 合法值为取值0或1的整数(不带括号).")
+                print("项目 \"side\" 在曲目 " + id + " 中不合法, 合法值为取值0或1的整数(不带引号).")
             else:
                 if side != 0 and side != 1:
-                    print("项目 \"side\" 在曲目 " + id + " 中不合法, 合法值为取值0或1的整数(不带括号).")
+                    print("项目 \"side\" 在曲目 " + id + " 中不合法, 合法值为取值0或1的整数(不带引号).")
 
         # Test for bg integrity
         if not standalone and checkBgIntegrity:
@@ -171,7 +168,7 @@ def checkSonglistElement():
                     if song["set"] not in packList:
                         print("曲目 " + id + " 中的项目 \"set\" 所指示的pack名称 \"" + song["set"] + "\" 在Packlist中未找到, 请检查对应关系.")
 
-        #title_localized
+        # title_localized
         if not "title_localized" in song.keys():
             print("应有的项目 \"title_localized\" 在曲目 " + id + " 中未找到.")
         else:
@@ -182,12 +179,12 @@ def checkSonglistElement():
                     if type(value) != type(" "):
                         print("Song title is not a string value for song " + id)
 
-        #bpm_base
+        # bpm_base
         if not "bpm_base" in song.keys():
             print("应有的项目 \"bpm_base\" 在曲目 " + id + " 中未找到.")
         else:
             if type(song["bpm_base"]) != type(1) and type(song["bpm_base"]) != type(1.1):
-                print("项目 \"bpm_base\" 在曲目 " + id + " 中不合法, 合法值为整数或小数(不带括号)")
+                print("项目 \"bpm_base\" 在曲目 " + id + " 中不合法, 合法值为整数或小数(不带引号)")
         
         # audioPreview & audioPreviewEnd
         audioPreviewValidity = 0
@@ -196,7 +193,7 @@ def checkSonglistElement():
             print("应有的项目 \"audioPreview\" 在曲目 " + id + " 中未找到.")
         else:
             if type(song["audioPreview"]) != type(1):
-                print("项目 \"audioPreview\" 在曲目 " + id + " 中不合法, 合法值为整数(不带括号)")
+                print("项目 \"audioPreview\" 在曲目 " + id + " 中不合法, 合法值为整数(不带引号)")
             else:
                 audioPreviewValidity += 1
         if not "audioPreviewEnd" in song.keys():
@@ -211,13 +208,13 @@ def checkSonglistElement():
             if song["audioPreviewEnd"] < song["audioPreview"]:
                 print("曲目 " + id + " 中, audioPreviewEnd 应当大于或等于 audioPreview.")
 
-        #date
+        # date
         if not "date" in song.keys():
             print("应有的项目 \"date\" is 在曲目 " + id + " 中未找到.")
         else:
             if type(song["date"]) != type(1):
-                print("项目 \"date\" 在曲目 " + id + " 中不合法, 合法值为整数(不带括号)")
-        
+                print("项目 \"date\" 在曲目 " + id + " 中不合法, 合法值为整数(不带引号)")
+
         # difficulties      
         if not "difficulties" in song.keys():
             print("应有的项目 \"difficulties\" is 在曲目 " + id + " 中未找到.")
@@ -229,27 +226,31 @@ def checkSonglistElement():
                 for level in song["difficulties"]:
                     for text in difficultiesTextElementList:
                         if not text in level.keys():
-                            print("应有的项目 \"" + text + "\" is 在曲目 " + id + " 的难度列表中未找到.")
+                            print("应有的项目 \"" + text + "\" 在曲目 " + id + " 的其中一个或多个难度中未找到.")
                         else:
                             if type(level[text]) != type(" "):
-                                print("项目 \"" + text + "\" 在曲目 " + id + " 中不合法, 合法值为字符串.")
+                                print("项目 \"" + text + "\" 在曲目 " + id + " 的其中一个或多个难度中不合法, 合法值为字符串.")
+                    if "hidden_until_unlocked" in level.keys():
+                        if level["hidden_until_unlocked"] == True and "hidden_until" not in level.keys():
+                            print("在曲目 " + id + " 的其中一个或多个难度中, 项目 \"hidden_until_unlocked\"设定为True (该曲目需要前置条件解除隐藏), \
+                                但项目 \"hidden_until\" 在对应难度中未找到 (曲目对应的解锁条件未找到).")
                     if not "ratingClass" in level.keys():
                         print("应有的项目 \"ratingClass\" 在曲目 " + id + " 的其中一个或多个难度中未找到.")
                     else:
                         if type(level["ratingClass"]) != type(1):
-                            print("项目 \"ratingClass\" 在曲目 " + id + " 的其中一个或多个难度中不合法, 合法值为取值0-3之间的整数(不带括号).")
+                            print("项目 \"ratingClass\" 在曲目 " + id + " 的其中一个或多个难度中不合法, 合法值为取值0-3之间的整数(不带引号).")
                         else:
                             if level["ratingClass"] > 3 or level["ratingClass"] < 0:
-                                print("项目 \"ratingClass\" 在曲目 " + id + " 的其中一个或多个难度中不合法, 合法值为取值0-3之间的整数(不带括号).")
+                                print("项目 \"ratingClass\" 在曲目 " + id + " 的其中一个或多个难度中不合法, 合法值为取值0-3之间的整数(不带引号).")
                             else:
                                 if rating[level["ratingClass"]] == 1:
-                                    print("项目 \"ratingClass\" 在曲目 " + id + " 中多次重复同一个值")
+                                    print("项目 \"ratingClass\" 在曲目 " + id + " 的不同难度中重复使用同一个值")
                                 else:
                                     rating[level["ratingClass"]] = 1
                     if not "rating" in level.keys():
                         print("应有的项目 \"rating\" 在曲目 " + id + " 的其中一个或多个难度中未找到.")
                     if type(level["rating"]) != type(0):
-                        print("项目 \"rating\" 在曲目 " + id + " 的其中一个或多个难度中不合法, 合法值为整数(不带括号).")
+                        print("项目 \"rating\" 在曲目 " + id + " 的其中一个或多个难度中不合法, 合法值为整数(不带引号).")
 
                 if rating[0:3] == [0,0,0]:
                     print("曲目" + id + "的难度不合法")
@@ -314,6 +315,8 @@ def resolvePacklist():
         exit()
     packlist = [packListId['id'] for packListId in packlistSeq]
     packlist.append("single")
+    if "epilogue" not in packlist:
+        print("packlist中未找到Silent Answer曲包。这可能导致部分4.0.255及以上版本壳体无法运行。")
     return packlist
 
 def resolveSonglist():
